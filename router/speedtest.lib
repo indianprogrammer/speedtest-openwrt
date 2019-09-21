@@ -1,0 +1,48 @@
+bestServer="NA"
+bestResponse="0"
+cacheBuster=$(head -30 /dev/urandom | tr -dc "0123456789" | head -c10)
+downloadSizes="350 500 750 1000 1500 2000 2500 3000 3500 4000"
+# downloadSizes="350 500 750"
+uploadSizes="500K 1M 2M 4M 10M"
+smallDownloadSizes="350 500 750 1000 1500 2000 2500 3000 3500 4000"
+smallUploadSizes="500K 1M 2M 4M 10M" 
+tempDir="/tmp/"
+speedUpload=0
+speedDownload=0
+
+performSpeedTest() {
+    echo $1
+    i=1
+    for size in $downloadSizes ; do
+        localFile=${tempDir}${cacheBuster}"-download-"${size}".jpg"
+        remoteFile=$1"/speedtest/random"${size}"x"${size}".jpg?x="${cacheBuster}"-"${i}
+        remoteFileSize=$(curl -I -s ${remoteFile}| awk 'tolower($0) ~/content-length/{print $2}')
+        remoteFileSizeMb=$(awk "BEGIN {print ${remoteFileSize}/1048576}")
+        i=$(( i + 1 ))
+        timeStart="$(date +%s%N)"
+        curl -s -o $localFile $remoteFile
+        timeEnd="$(date +%s%N)"
+        durationSec=$(awk "BEGIN {print $(( timeEnd - timeStart ))/1000000000}")
+        speedDownload=$(awk "BEGIN {print ${remoteFileSizeMb}*8/${durationSec}}")
+        echo "$remoteFile $size $remoteFileSizeMb $durationSec $speedDownload Mbps"
+    done
+}
+
+getBestServer() {
+    for host in $@ ; do
+        timeStart="$(date +%s%N)"
+        curl -s -o /dev/null $host/speedtest/latency.txt?x=$cacheBuster
+        timeEnd="$(date +%s%N)"
+
+        durationNanoSec=$(( timeEnd - timeStart ))
+        # echo "check $host $durationNanoSec" 
+        if [ $bestResponse -eq 0 ]; then
+            bestServer=$host
+            bestResponse=$durationNanoSec
+        elif [ $bestResponse -gt $durationNanoSec ]; then
+            bestServer=$host
+            bestResponse=$durationNanoSec
+        fi
+        # echo "best $bestServer $bestResponse "
+    done
+}
